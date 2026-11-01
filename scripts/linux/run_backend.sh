@@ -3,11 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SERVER_DIR="$PROJECT_DIR/server"
 
 if [ ! -d "$SERVER_DIR/.venv" ]; then
-    echo "[run] venv not found. Run ./scripts/setup.sh first."
+    echo "[run] venv not found. Run bash scripts/linux/setup.sh first."
     exit 1
 fi
 

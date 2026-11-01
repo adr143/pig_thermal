@@ -3,11 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WEB_DIR="$PROJECT_DIR/web"
 
 if [ ! -d "$WEB_DIR/node_modules" ]; then
-    echo "[run] node_modules not found. Run ./scripts/setup.sh first."
+    echo "[run] node_modules not found. Run bash scripts/linux/setup.sh first."
     exit 1
 fi
 

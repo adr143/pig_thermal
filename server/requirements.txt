@@ -6,7 +6,10 @@
 # Web framework + WebSocket
 Flask==3.0.3
 flask-socketio==5.3.6
-eventlet==0.36.1            # async driver for flask-socketio
+# async_mode='threading' — fully cross-platform (Windows + Linux + macOS).
+# No eventlet / gevent needed for a single-machine mini-PC deployment.
+simple-websocket==1.1.0     # WebSocket transport for threading mode
+waitress==3.0.0             # Windows-friendly WSGI server
 
 # Image / video
 opencv-python==4.10.0.84

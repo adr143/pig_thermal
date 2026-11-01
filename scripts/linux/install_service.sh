@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # systemd service file generator for the Flask backend.
-# Run as root: sudo ./scripts/install_service.sh
+# Run from the project root: sudo bash scripts/linux/install_service.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SERVER_DIR="$PROJECT_DIR/server"
 
 # Detect the user that owns the project dir

@@ -5,7 +5,7 @@
 # ============================================================
 set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SERVER_DIR="$PROJECT_DIR/server"
 WEB_DIR="$PROJECT_DIR/web"
 
@@ -53,5 +53,5 @@ echo "Next steps:"
 echo "  1. Drop your .pt models into server/models/ (pig_detect.pt, pig_classify.pt)"
 echo "  2. Edit server/.env and set WS_HOST etc. (or use defaults)"
 echo "  3. Flash the ESP32 sketch from arduino/esp32_thermal_cam/"
-echo "  4. Start the backend:  ./scripts/run_backend.sh"
-echo "  5. Start the UI:      ./scripts/run_web.sh"
+echo "  4. Start the backend:  bash scripts/linux/run_backend.sh"
+echo "  5. Start the UI:      bash scripts/linux/run_web.sh"

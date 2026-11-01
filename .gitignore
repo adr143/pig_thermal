@@ -1,5 +1,6 @@
 # Dependencies
 .venv/
+node_modules/
 __pycache__/
 *.pyc
 *.pyo
@@ -13,13 +14,25 @@ __pycache__/
 # Snapshots
 server/snapshots/
 
+# Web build output
+.next/
+out/
+
 # Env
 .env
 .env.local
+.env.production
+
+# Local device credentials
+arduino/esp32_thermal_cam/secrets.h
 
 # Editor
 .vscode/
 .idea/
+
+# Logs
+*.log
+npm-debug.log*
 
 # OS
 .DS_Store

@@ -26,6 +26,7 @@ import stream_ws_server
 from config import config
 from flask import Flask, jsonify, send_from_directory, request
 from flask_socketio import SocketIO
+from live_state import state
 from webcam import webcam_loop
 
 # ---------------------------------------------------------------------------
@@ -46,7 +47,11 @@ app.config["CORS_HEADERS"] = "Content-Type"
 
 socketio = SocketIO(
     app,
-    async_mode="eventlet",
+    # 'threading' mode is fully cross-platform (Windows + Linux + macOS).
+    # eventlet has known issues on Windows; gevent needs more setup.
+    # Threading mode is plenty fast for a single mini-PC deployment
+    # (1-2 thermal clients + a handful of browsers).
+    async_mode="threading",
     cors_allowed_origins=config.CORS_ORIGINS,
     ping_timeout=20,
     ping_interval=15,
@@ -226,7 +231,7 @@ def api_live_webcam_jpg():
 # ---------------------------------------------------------------------------
 @app.before_request
 def _boot_check():
-    """Lazy-init background threads on first request (eventlet-friendly)."""
+    """Lazy-init background threads on first request."""
     if not getattr(app, "_inited", False):
         app._inited = True
         _start_background()
@@ -240,9 +245,10 @@ def _noop(*a, **kw):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    log.info("starting Pig Monitoring backend on %s:%d", config.HOST, config.PORT)
-    # Pre-warm background threads before serving requests
+def _run_dev():
+    """Run with Werkzeug dev server (works on Windows + Linux)."""
+    log.info("starting Pig Monitoring backend (dev) on %s:%d",
+             config.HOST, config.PORT)
     _start_background()
     try:
         socketio.run(
@@ -256,3 +262,29 @@ if __name__ == "__main__":
     finally:
         _stop_event.set()
         snapshot.shutdown_scheduler()
+
+
+def _run_prod():
+    """Run Socket.IO without the Flask debug server."""
+    log.info("starting Pig Monitoring backend on %s:%d",
+             config.HOST, config.PORT)
+    _start_background()
+    try:
+        socketio.run(
+            app,
+            host=config.HOST,
+            port=config.PORT,
+            debug=False,
+            use_reloader=False,
+            allow_unsafe_werkzeug=True,
+        )
+    finally:
+        _stop_event.set()
+        snapshot.shutdown_scheduler()
+
+
+if __name__ == "__main__":
+    if os.getenv("PIGMON_PROD", "0") == "1":
+        _run_prod()
+    else:
+        _run_dev()

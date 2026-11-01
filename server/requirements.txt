@@ -3,13 +3,10 @@
 # Install inside a venv:  pip install -r requirements.txt
 # ============================================================
 
-# Web framework + WebSocket
+# Web framework + raw WebSocket
 Flask==3.0.3
-flask-socketio==5.3.6
-# async_mode='threading' — fully cross-platform (Windows + Linux + macOS).
-# No eventlet / gevent needed for a single-machine mini-PC deployment.
-simple-websocket==1.1.0     # WebSocket transport for threading mode
-waitress==3.0.0             # Windows-friendly WSGI server
+flask-sock==0.7.0
+simple-websocket==1.1.0
 
 # Image / video
 opencv-python==4.10.0.84

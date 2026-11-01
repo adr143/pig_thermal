@@ -3,7 +3,7 @@ Webcam capture thread.
 
 Continuously reads frames from the webcam, runs inference every Nth frame,
 annotates bounding boxes + class labels, JPEG-encodes, and emits
-'webcam_frame' events to all browser clients via flask-socketio.
+'webcam_frame' events to connected raw WebSocket clients.
 
 Also computes pig count + classification stats and updates LiveState.
 """
@@ -21,6 +21,7 @@ import numpy as np
 from config import config
 from inference import detect_and_classify, models_loaded, load_models
 from live_state import PigLive, WebcamStats, state
+from websocket_hub import broadcast
 
 log = logging.getLogger("webcam")
 
@@ -100,8 +101,8 @@ def _jpg_encode(frame: np.ndarray) -> bytes:
     return buf.tobytes()
 
 
-def webcam_loop(socketio, stop_event) -> None:
-    """Main webcam capture + inference + emit loop. Runs in a thread."""
+def webcam_loop(stop_event) -> None:
+    """Main webcam capture + inference + broadcast loop. Runs in a thread."""
     _ensure_models()
 
     log.info("webcam: opening VideoCapture(%d)", config.WEBCAM_INDEX)
@@ -166,7 +167,7 @@ def webcam_loop(socketio, stop_event) -> None:
             last_emit_ms = now_ms
 
             try:
-                socketio.emit(
+                broadcast(
                     "webcam_frame",
                     {
                         "img": "data:image/jpeg;base64," + base64.b64encode(jpg).decode("ascii"),
@@ -187,10 +188,9 @@ def webcam_loop(socketio, stop_event) -> None:
                             for d in last_dets
                         ],
                     },
-                    namespace="/ws/stream",
                 )
             except Exception as e:
-                log.debug("emit webcam_frame failed: %s", e)
+                log.debug("broadcast webcam_frame failed: %s", e)
     finally:
         cap.release()
         log.info("webcam: loop stopped, capture released")

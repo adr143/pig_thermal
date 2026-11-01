@@ -1,57 +1,105 @@
-"""
-Browser-facing WebSocket namespace '/ws/stream'.
-
-Clients connect here to receive:
-  - 'webcam_frame' : { img: 'data:image/jpeg;base64,...', t, stats, detections }
-  - 'thermal_frame': { t, ambient, temps[768], stats }
-  - 'snapshot_taken' : { snapshot_id, captured_at, source, pig_count, ... }
-  - 'hello' (response to client hello)
-
-Clients can emit:
-  - 'take_snapshot'  -> triggers an immediate snapshot
-  - 'request_stats'  -> replies with current stats
-"""
+"""Raw WebSocket endpoint for browser stream events and commands."""
 from __future__ import annotations
 
+import json
 import logging
+import math
+import queue
+from typing import Any
 
 from flask import request
-from flask_socketio import Namespace, emit
+from flask_sock import Sock
+from simple_websocket import ConnectionClosed
 
+from config import config
 from live_state import state
+from websocket_hub import send_event, origin_allowed, subscribe, unsubscribe
 
 log = logging.getLogger("stream")
 
 
-class StreamNamespace(Namespace):
-    def on_connect(self, *args, **kwargs):
-        state.inc_browser_client()
+def register_stream_route(sock: Sock) -> None:
+    @sock.route("/ws/stream")
+    def stream_socket(ws: Any) -> None:
+        origin = request.headers.get("Origin")
+        if not origin_allowed(origin, config.CORS_ORIGINS):
+            log.warning("stream: rejected WebSocket origin %s", origin)
+            ws.close(reason=1008, message="origin not allowed")
+            return
+
+        client_queue = subscribe()
+        clients = state.inc_browser_client()
         log.info("browser connected from %s (clients=%d)",
-                 request.remote_addr, state.browser_clients)
-        emit("hello", {
-            "msg": "connected",
-            "thermal_clients": state.thermal_clients,
-            "browser_clients": state.browser_clients,
-            "thermal_age_s": round(state.thermal_age_s(), 1),
-        })
+                 request.remote_addr, clients)
+        try:
+            ws.send(send_event("hello", {
+                "msg": "connected",
+                "thermal_clients": state.thermal_clients,
+                "browser_clients": clients,
+                "thermal_age_s": _thermal_age_s(),
+            }))
+            while True:
+                try:
+                    message = ws.receive(timeout=0.1)
+                except TimeoutError:
+                    message = None
+                except ConnectionClosed:
+                    break
 
-    def on_disconnect(self, *args, **kwargs):
-        state.dec_browser_client()
-        log.info("browser disconnected (clients=%d)", state.browser_clients)
+                if message is not None:
+                    _handle_command(ws, message)
 
-    def on_take_snapshot(self, data):
-        # Triggered by the "Snapshot" button on the UI
+                try:
+                    ws.send(client_queue.get_nowait())
+                except queue.Empty:
+                    pass
+        except ConnectionClosed:
+            pass
+        except Exception:
+            log.exception("stream: WebSocket connection failed")
+        finally:
+            unsubscribe(client_queue)
+            clients = state.dec_browser_client()
+            log.info("browser disconnected (clients=%d)", clients)
+
+
+def _handle_command(ws: Any, message: Any) -> None:
+    if isinstance(message, bytes):
+        try:
+            message = message.decode("utf-8")
+        except UnicodeDecodeError:
+            log.warning("stream: received non-UTF-8 binary command")
+            return
+    if not isinstance(message, str):
+        log.warning("stream: received unsupported command type")
+        return
+
+    try:
+        command = json.loads(message)
+    except json.JSONDecodeError:
+        log.warning("stream: received invalid JSON command")
+        return
+    if not isinstance(command, dict):
+        log.warning("stream: expected a JSON command object")
+        return
+
+    command_type = command.get("type")
+    if command_type == "take_snapshot":
         from snapshot import trigger_manual_snapshot
-        log.info("snapshot triggered via WS by client")
-        result = trigger_manual_snapshot()
-        emit("snapshot_taken", result, broadcast=True, include_self=True)
 
-    def on_request_stats(self, _):
-        jpeg, dets, stats = state.get_webcam()
-        emit("stats_update", {
+        log.info("snapshot triggered via raw WebSocket")
+        trigger_manual_snapshot()
+    elif command_type == "request_stats":
+        _, _, stats = state.get_webcam()
+        ws.send(send_event("stats_update", {
             "pig_count": stats.pig_count,
             "classifications": stats.classifications,
             "avg_thermal_c": stats.avg_thermal_c,
-            "thermal_age_s": round(state.thermal_age_s(), 1),
+            "thermal_age_s": _thermal_age_s(),
             "thermal_clients": state.thermal_clients,
-        })
+        }))
+
+
+def _thermal_age_s() -> float | None:
+    age = state.thermal_age_s()
+    return round(age, 1) if math.isfinite(age) else None

@@ -98,10 +98,26 @@ export const api = {
     }),
 };
 
-// WebSocket URL helper. In dev, Next.js rewrites /ws/* to the backend.
+// WebSocket streams connect directly to Flask; Next.js rewrites are HTTP-only.
 export function streamWsUrl(): string {
   if (typeof window === "undefined") return "";
-  // Use the same host as the page so the rewrite proxy works.
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${window.location.host}/ws/stream`;
+
+  const configuredBase = process.env.NEXT_PUBLIC_WS_BASE;
+  if (configuredBase) {
+    const url = new URL(configuredBase, window.location.href);
+    if (url.protocol === "https:") url.protocol = "wss:";
+    if (url.protocol === "http:") url.protocol = "ws:";
+    if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      throw new Error("NEXT_PUBLIC_WS_BASE must use ws:// or wss://");
+    }
+    return `${url.protocol}//${url.host}/ws/stream`;
+  }
+
+  const url = new URL(window.location.href);
+  url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  url.port = "5000";
+  url.pathname = "/ws/stream";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }

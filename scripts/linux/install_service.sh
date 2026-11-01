@@ -14,7 +14,7 @@ SERVICE_FILE="/etc/systemd/system/pigmonitor.service"
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Pig Monitoring System Backend (Flask + Socket.IO)
+Description=Pig Monitoring System Backend (Flask + raw WebSockets)
 After=network-online.target
 Wants=network-online.target
 

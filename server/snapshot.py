@@ -26,20 +26,12 @@ import db
 from config import config
 from inference import detect_and_classify, load_models
 from live_state import state
+from websocket_hub import broadcast
 
 log = logging.getLogger("snapshot")
 
 _scheduler: Optional[BackgroundScheduler] = None
 _job = None  # current scheduled job
-
-# Try to import socketio lazily to avoid circular import
-def _socketio():
-    try:
-        from app import socketio
-        return socketio
-    except Exception:
-        return None
-
 
 def _snapshots_dir() -> str:
     os.makedirs(config.SNAPSHOTS_DIR, exist_ok=True)
@@ -193,13 +185,7 @@ def _do_capture(source: str) -> Dict[str, Any]:
         ],
     }
 
-    # Broadcast to all browser clients
-    sock = _socketio()
-    if sock is not None:
-        try:
-            sock.emit("snapshot_taken", result, namespace="/ws/stream")
-        except Exception as e:
-            log.debug("broadcast snapshot_taken failed: %s", e)
+    broadcast("snapshot_taken", result)
 
     return result
 

@@ -6,7 +6,7 @@ Modules:
   - webcam_state    : last webcam JPEG (annotated) + detections + stats
   - snapshot hub    : channels for streaming to browser clients
 
-This is a thin in-memory cache. flask-socketio broadcasts happen in
+This is a thin in-memory cache. Raw WebSocket broadcasts happen in
 stream_ws_server.py (webcam thread) and thermal_ws_server.py (ESP32 receive).
 """
 from __future__ import annotations
@@ -60,8 +60,7 @@ class LiveState:
         self.webcam_detections: List[PigLive] = []
         self.webcam_stats = WebcamStats()
 
-        # Sockets currently subscribed to the browser stream
-        # (flask-socketio rooms are used for actual fan-out — this is metadata)
+        # Current browser and ESP32 WebSocket connection counts.
         self.browser_clients: int = 0
         self.thermal_clients: int = 0  # ESP32 nodes connected
 

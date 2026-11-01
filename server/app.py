@@ -2,7 +2,7 @@
 Flask app entry point.
 
   - Defines routes (REST API)
-  - Registers SocketIO namespaces (/ws/thermal for ESP32, /ws/stream for browsers)
+  - Serves raw WebSocket endpoints for ESP32 thermal input and browser streams
   - Starts webcam thread + scheduler on boot
   - Serves the snapshot JPEGs from disk
 
@@ -25,7 +25,7 @@ import thermal_ws_server
 import stream_ws_server
 from config import config
 from flask import Flask, jsonify, send_from_directory, request
-from flask_socketio import SocketIO
+from flask_sock import Sock
 from live_state import state
 from webcam import webcam_loop
 
@@ -39,28 +39,18 @@ logging.basicConfig(
 log = logging.getLogger("app")
 
 # ---------------------------------------------------------------------------
-# Flask + SocketIO
+# Flask + raw WebSockets
 # ---------------------------------------------------------------------------
 app = Flask(__name__, static_folder=None)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "change-me-in-prod")
 app.config["CORS_HEADERS"] = "Content-Type"
-
-socketio = SocketIO(
-    app,
-    # 'threading' mode is fully cross-platform (Windows + Linux + macOS).
-    # eventlet has known issues on Windows; gevent needs more setup.
-    # Threading mode is plenty fast for a single mini-PC deployment
-    # (1-2 thermal clients + a handful of browsers).
-    async_mode="threading",
-    cors_allowed_origins=config.CORS_ORIGINS,
-    ping_timeout=20,
-    ping_interval=15,
-    max_http_buffer_size=2 * 1024 * 1024,  # 2 MB thermal frames fit
-)
-
-# Register WS namespaces
-socketio.on_namespace(thermal_ws_server.ThermalNamespace("/ws/thermal"))
-socketio.on_namespace(stream_ws_server.StreamNamespace("/ws/stream"))
+app.config["SOCK_SERVER_OPTIONS"] = {
+    "ping_interval": 25,
+    "max_message_size": 1024 * 1024,
+}
+sock = Sock(app)
+thermal_ws_server.register_thermal_route(sock)
+stream_ws_server.register_stream_route(sock)
 
 # ---------------------------------------------------------------------------
 # Background threads
@@ -75,7 +65,7 @@ def _start_background() -> None:
     snapshot.init_scheduler()
     if _webcam_thread is None or not _webcam_thread.is_alive():
         _webcam_thread = threading.Thread(
-            target=webcam_loop, args=(socketio, _stop_event), daemon=True
+            target=webcam_loop, args=(_stop_event,), daemon=True
         )
         _webcam_thread.start()
         log.info("webcam thread started")
@@ -237,27 +227,21 @@ def _boot_check():
         _start_background()
 
 
-@socketio.on("connect", namespace="/ws/stream")
-def _noop(*a, **kw):
-    pass
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def _run_dev():
-    """Run with Werkzeug dev server (works on Windows + Linux)."""
+    """Run the Flask-Sock app with Werkzeug's raw WebSocket support."""
     log.info("starting Pig Monitoring backend (dev) on %s:%d",
              config.HOST, config.PORT)
     _start_background()
     try:
-        socketio.run(
-            app,
+        app.run(
             host=config.HOST,
             port=config.PORT,
             debug=config.DEBUG,
             use_reloader=False,
-            allow_unsafe_werkzeug=True,
+            threaded=True,
         )
     finally:
         _stop_event.set()
@@ -265,18 +249,17 @@ def _run_dev():
 
 
 def _run_prod():
-    """Run Socket.IO without the Flask debug server."""
+    """Run with Flask debug mode disabled."""
     log.info("starting Pig Monitoring backend on %s:%d",
              config.HOST, config.PORT)
     _start_background()
     try:
-        socketio.run(
-            app,
+        app.run(
             host=config.HOST,
             port=config.PORT,
             debug=False,
             use_reloader=False,
-            allow_unsafe_werkzeug=True,
+            threaded=True,
         )
     finally:
         _stop_event.set()

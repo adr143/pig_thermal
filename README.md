@@ -1,6 +1,6 @@
 # Pig Monitoring System
 
-Windows-first monitoring dashboard using an ESP32 thermal camera, a Flask + Socket.IO backend, and a Next.js web app. Linux setup notes and Bash equivalents are included for future deployments.
+Windows-first monitoring dashboard using an ESP32 thermal camera, a Flask backend with raw WebSocket endpoints, and a Next.js web app. Linux setup notes and Bash equivalents are included for future deployments.
 
 ## Requirements
 
@@ -9,7 +9,7 @@ Windows-first monitoring dashboard using an ESP32 thermal camera, a Flask + Sock
 - Node.js 18+ and npm
 - ESP32 Arduino toolchain and the libraries required by the sketch
 
-The backend uses Flask-SocketIO's cross-platform `threading` mode. It does not use Eventlet.
+Thermal data and browser live updates use standard raw WebSockets; the backend does not require the Socket.IO protocol, Eventlet, or a separate greenlet-based server.
 
 ## Setup on Windows
 
@@ -41,7 +41,9 @@ Start the backend and web app in separate PowerShell windows:
 .\scripts\run_web.ps1
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The Next.js development server proxies API and WebSocket requests to Flask.
+Open [http://localhost:3000](http://localhost:3000). Next.js proxies HTTP API requests to Flask. The browser connects directly to Flask at `ws://<page-host>:5000/ws/stream`; set `NEXT_PUBLIC_WS_BASE` in `web\.env.local` if Flask is on another host or accessed through TLS. Add the dashboard's origin to `CORS_ORIGINS` in `server\.env`.
+
+The ESP32 connects directly to `ws://<mini-PC-IP>:5000/ws/thermal` and sends each thermal frame as a raw WebSocket text message containing JSON: `{"type":"frame","t":1234,"ambient":24.5,"temps":[...]}`. The browser stream at `/ws/stream` also uses raw WebSocket JSON messages, with a top-level `type` such as `thermal_frame`, `webcam_frame`, or `snapshot_taken`.
 
 To start the apps automatically at user logon:
 
@@ -66,7 +68,7 @@ The backend systemd installer is `sudo bash scripts/linux/install_service.sh`. I
 ## Project layout
 
 - `arduino/esp32_thermal_cam/` — ESP32 sketch and Wi-Fi/server configuration template.
-- `server/` — Flask API, Socket.IO namespaces, inference, and snapshot scheduling.
+- `server/` — Flask API, raw WebSocket endpoints, inference, and snapshot scheduling.
 - `server/models/` — Place the trained model files here.
 - `server/snapshots/` and `server/pigs.db` — Created at runtime.
 - `web/` — Next.js dashboard.

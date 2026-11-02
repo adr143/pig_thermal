@@ -15,6 +15,7 @@ from thermal_ws_server import handle_thermal_message
 log = logging.getLogger("thermal.serial")
 _reader_thread: Optional[threading.Thread] = None
 _reader_lock = threading.Lock()
+_non_utf8_lines = 0
 
 
 def start_thermal_serial_reader(stop_event: threading.Event) -> None:
@@ -59,7 +60,7 @@ def _read_serial_frames(stop_event: threading.Event) -> None:
                         try:
                             message = raw_line.decode("utf-8").strip()
                         except UnicodeDecodeError:
-                            log.warning("thermal serial: received non-UTF-8 data")
+                            _log_non_utf8_data(raw_line)
                             continue
                         if not message:
                             continue
@@ -76,3 +77,21 @@ def _read_serial_frames(stop_event: threading.Event) -> None:
                 config.THERMAL_SERIAL_PORT,
             )
             stop_event.wait(5)
+
+
+def _log_non_utf8_data(raw_line: bytes) -> None:
+    global _non_utf8_lines
+    _non_utf8_lines += 1
+    if _non_utf8_lines == 1 or _non_utf8_lines % 20 == 0:
+        sample = raw_line[:32].hex(" ")
+        suffix = " ..." if len(raw_line) > 32 else ""
+        log.warning(
+            "thermal serial: non-UTF-8 input on %s at %d baud "
+            "(line %d, %d bytes, hex=%s%s); expecting newline-delimited UTF-8 JSON",
+            config.THERMAL_SERIAL_PORT,
+            config.THERMAL_SERIAL_BAUD,
+            _non_utf8_lines,
+            len(raw_line),
+            sample,
+            suffix,
+        )

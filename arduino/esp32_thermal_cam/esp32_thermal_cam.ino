@@ -1,15 +1,37 @@
 /*
- * ESP32 Thermal Camera Node (I2C sensor, USB serial output)
+ * ESP32 Thermal Camera Node (I2C sensor, Wi-Fi WebSocket output)
  * ---------------------------------------------------------------
  */
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <Wire.h>
 #include <Adafruit_MLX90640.h>
+#include <ArduinoWebsockets.h>
+#include <ArduinoJson.h>
+#include "secrets.h"
+
+using namespace websockets;
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
+#ifndef WIFI_SSID
+  #define WIFI_SSID     "YOUR_WIFI_SSID"
+#endif
+#ifndef WIFI_PASSWORD
+  #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#endif
+#ifndef WS_HOST
+  #define WS_HOST       "192.168.0.103"
+#endif
+#ifndef WS_PORT
+  #define WS_PORT       5000
+#endif
+#ifndef WS_PATH
+  #define WS_PATH       "/ws/thermal"
+#endif
+
 // ---- I2C bus ----
 #ifndef I2C_SDA
   #define I2C_SDA       21
@@ -34,17 +56,19 @@
 #endif
 
 #define PIXEL_COUNT         768     // 32 x 24
-#define FRAME_INTERVAL_MS   250     // throttle serial send rate
+#define FRAME_INTERVAL_MS   250     // throttle WebSocket send rate
 
 // ---------------------------------------------------------------------------
 // Globals
 // ---------------------------------------------------------------------------
+WebsocketsClient client;
 Adafruit_MLX90640 mlx;
 
 static float      frameBuf[PIXEL_COUNT];
 bool              mlxReady = false;
 
 uint32_t          lastSendMs          = 0;
+uint32_t          lastHeartbeatMs     = 0;
 uint32_t          lastDiagnosticsMs   = 0;
 uint32_t          validSensorFrames   = 0;
 uint32_t          i2cErrors           = 0;
@@ -56,15 +80,20 @@ uint32_t          sentFrames          = 0;
 bool initMLX();
 void scanI2C();
 bool readAndSendFrame();
+void connectWiFi();
+void connectWebSocket();
+void sendHeartbeat();
+void onWsEvent(WebsocketsEvent event, String data);
+void onWsMessage(WebsocketsMessage message);
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 void setup() {
-  Serial.begin(115200);
-  delay(150);
+  Serial.begin(921600);
+  delay(500);
   Serial.println();
-  Serial.println(F("[boot] ESP32 Thermal Camera Node (USB serial mode)"));
+  Serial.println(F("[boot] ESP32 Thermal Camera Node (Wi-Fi WebSocket mode)"));
 
   // ---- Drive GY-MCU90640 PS pin LOW for I2C mode ----
   #if PS_PIN >= 0
@@ -86,23 +115,47 @@ void setup() {
   // ---- MLX90640 init ----
   mlxReady = initMLX();
 
+  connectWiFi();
+  client.onEvent(onWsEvent);
+  client.onMessage(onWsMessage);
+  connectWebSocket();
 }
 
 // ---------------------------------------------------------------------------
 // Loop
 // ---------------------------------------------------------------------------
 void loop() {
+  client.poll();
+
   if (mlxReady) {
     readAndSendFrame();
+  }
+
+  if (!client.available()) {
+    static uint32_t lastReconnectMs = 0;
+    if (millis() - lastReconnectMs > 5000) {
+      lastReconnectMs = millis();
+      if (WiFi.status() != WL_CONNECTED) {
+        connectWiFi();
+      } else {
+        connectWebSocket();
+      }
+    }
+  }
+
+  if (millis() - lastHeartbeatMs > 10000) {
+    lastHeartbeatMs = millis();
+    if (client.available()) sendHeartbeat();
   }
 
   // Diagnostics every 5 s
   if ((millis() - lastDiagnosticsMs) > 5000) {
     lastDiagnosticsMs = millis();
-    Serial.printf("[diag] sensor_frames=%lu i2c_errors=%lu serial_frames_sent=%lu mlx_ok=%s\n",
+    Serial.printf("[diag] sensor_frames=%lu i2c_errors=%lu ws_frames_sent=%lu ws_connected=%s mlx_ok=%s\n",
                   (unsigned long)validSensorFrames,
                   (unsigned long)i2cErrors,
                   (unsigned long)sentFrames,
+                  client.available() ? "yes" : "no",
                   mlxReady ? "yes" : "no");
   }
 }
@@ -146,7 +199,74 @@ void scanI2C() {
 }
 
 // ---------------------------------------------------------------------------
-// Frame read + serial output
+// Wi-Fi and WebSocket transport
+// ---------------------------------------------------------------------------
+void connectWiFi() {
+  Serial.printf("[wifi] connecting to %s", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  uint32_t startMs = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startMs < 30000) {
+    delay(300);
+    Serial.print(".");
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("\n[wifi] connection failed; restarting in 5 s"));
+    delay(5000);
+    ESP.restart();
+    return;
+  }
+
+  Serial.printf("\n[wifi] connected, IP=%s RSSI=%d dBm\n",
+                WiFi.localIP().toString().c_str(), WiFi.RSSI());
+}
+
+void connectWebSocket() {
+  char url[128];
+  snprintf(url, sizeof(url), "ws://%s:%u%s", WS_HOST, WS_PORT, WS_PATH);
+  Serial.printf("[ws] connecting to %s\n", url);
+  if (client.connect(url)) {
+    Serial.println(F("[ws] connected"));
+    client.send("{\"type\":\"hello\",\"device\":\"esp32-thermal\",\"fw\":3,\"iface\":\"wifi\"}");
+  } else {
+    Serial.println(F("[ws] connect failed"));
+  }
+}
+
+void onWsEvent(WebsocketsEvent event, String data) {
+  switch (event) {
+    case WebsocketsEvent::ConnectionOpened:
+      Serial.println(F("[ws] opened"));
+      break;
+    case WebsocketsEvent::ConnectionClosed:
+      Serial.println(F("[ws] closed"));
+      break;
+    default:
+      break;
+  }
+}
+
+void onWsMessage(WebsocketsMessage message) {
+  Serial.printf("[ws] server: %s\n", message.data().c_str());
+}
+
+void sendHeartbeat() {
+  StaticJsonDocument<160> doc;
+  doc["type"] = "heartbeat";
+  doc["uptime_s"] = (uint32_t)(millis() / 1000);
+  doc["rssi"] = WiFi.RSSI();
+  doc["free_heap"] = ESP.getFreeHeap();
+  doc["mlx_ok"] = mlxReady;
+  String out;
+  serializeJson(doc, out);
+  client.send(out);
+}
+
+// ---------------------------------------------------------------------------
+// Frame read + send
 // ---------------------------------------------------------------------------
 bool readAndSendFrame() {
   int rc = mlx.getFrame(frameBuf);
@@ -198,7 +318,10 @@ bool readAndSendFrame() {
   }
   out += "]}";
 
-  Serial.println(out);
+  if (!client.send(out)) {
+    Serial.println(F("[ws] thermal frame send failed"));
+    return false;
+  }
   sentFrames++;
   return true;
 }

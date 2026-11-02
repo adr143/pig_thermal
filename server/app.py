@@ -2,7 +2,7 @@
 Flask app entry point.
 
   - Defines routes (REST API)
-  - Serves raw WebSocket endpoints for browser streams and optional thermal input
+  - Serves raw WebSocket endpoints for ESP32 thermal input and browser streams
   - Starts webcam thread + scheduler on boot
   - Serves the snapshot JPEGs from disk
 
@@ -21,7 +21,6 @@ from datetime import datetime
 
 import db
 import snapshot
-import thermal_serial_server
 import thermal_ws_server
 import stream_ws_server
 from config import config
@@ -64,7 +63,6 @@ def _start_background() -> None:
     global _webcam_thread
     db.init_db()
     snapshot.init_scheduler()
-    thermal_serial_server.start_thermal_serial_reader(_stop_event)
     if _webcam_thread is None or not _webcam_thread.is_alive():
         _webcam_thread = threading.Thread(
             target=webcam_loop, args=(_stop_event,), daemon=True

@@ -77,7 +77,7 @@ Write-Host "[setup] done." -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Drop your .pt models into server\models\ (pig_detect.pt, pig_classify.pt)"
-Write-Host "  2. Edit server\.env and set THERMAL_SERIAL_PORT to the ESP32 COM port"
+Write-Host "  2. Configure Wi-Fi credentials and WS_HOST in arduino\esp32_thermal_cam\secrets.h"
 Write-Host "  3. Flash the ESP32 sketch from arduino\esp32_thermal_cam\"
 Write-Host "  4. Start the backend:  .\scripts\run_backend.ps1"
 Write-Host "  5. Start the UI:       .\scripts\run_web.ps1"

@@ -27,6 +27,9 @@ log = logging.getLogger("webcam")
 
 # Track inference models across reloads
 _MODELS_TRIED = False
+_READ_FAILURES_BEFORE_RECONNECT = 5
+_RECONNECT_DELAY_S = 2.0
+_READ_RETRY_DELAY_S = 0.2
 
 
 def _ensure_models() -> None:
@@ -105,92 +108,118 @@ def webcam_loop(stop_event) -> None:
     """Main webcam capture + inference + broadcast loop. Runs in a thread."""
     _ensure_models()
 
-    log.info("webcam: opening VideoCapture(%d)", config.WEBCAM_INDEX)
-    cap = cv2.VideoCapture(config.WEBCAM_INDEX)
-    if not cap.isOpened():
-        log.error("webcam: cannot open VideoCapture(%d). "
-                  "Check device index / permissions.", config.WEBCAM_INDEX)
-        return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.WEBCAM_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.WEBCAM_HEIGHT)
-    cap.set(cv2.CAP_PROP_FPS, config.WEBCAM_FPS)
-    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    log.info("webcam: opened at %dx%d", actual_w, actual_h)
-
     frame_idx = 0
     last_dets: List = []
     last_stats = WebcamStats()
     last_emit_ms = 0
 
-    try:
-        while not stop_event.is_set():
-            ok, frame = cap.read()
-            if not ok:
-                log.warning("webcam: read failed, retrying in 200ms")
-                time.sleep(0.2)
-                continue
-
-            frame_idx += 1
-
-            # Run inference on every Nth frame to bound CPU usage
-            if frame_idx % config.INFERENCE_EVERY_N_FRAMES == 0:
-                try:
-                    last_dets = detect_and_classify(frame)
-                    last_stats = _build_stats(last_dets)
-                    last_stats.avg_thermal_c = _compute_avg_thermal()
-                except Exception as e:
-                    log.exception("inference failed: %s", e)
-
-            # Always annotate using last detections so the stream stays smooth
-            annotated = _annotate(frame, last_dets) if last_dets else frame
-            jpg = _jpg_encode(annotated)
-
-            state.set_webcam(
-                jpeg=jpg,
-                dets=[
-                    PigLive(
-                        bbox=list(d.bbox),
-                        detection_conf=d.confidence,
-                        classification=d.classification,
-                        class_confidence=d.class_confidence,
-                    ) for d in last_dets
-                ],
-                stats=last_stats,
+    while not stop_event.is_set():
+        log.info("webcam: opening VideoCapture(%d)", config.WEBCAM_INDEX)
+        cap = cv2.VideoCapture(config.WEBCAM_INDEX)
+        if not cap.isOpened():
+            log.error(
+                "webcam: cannot open VideoCapture(%d); retrying in %.1f seconds",
+                config.WEBCAM_INDEX,
+                _RECONNECT_DELAY_S,
             )
+            cap.release()
+            stop_event.wait(_RECONNECT_DELAY_S)
+            continue
 
-            # Throttle broadcasts (no need to flood clients if FPS > broadcast cap)
-            now_ms = int(time.time() * 1000)
-            if now_ms - last_emit_ms < config.WEBCAM_BROADCAST_MIN_MS:
-                continue
-            last_emit_ms = now_ms
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.WEBCAM_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.WEBCAM_HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, config.WEBCAM_FPS)
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        log.info("webcam: opened at %dx%d", actual_w, actual_h)
 
-            try:
-                broadcast(
-                    "webcam_frame",
-                    {
-                        "img": "data:image/jpeg;base64," + base64.b64encode(jpg).decode("ascii"),
-                        "t": int(time.time() * 1000),
-                        "stats": {
-                            "pig_count": last_stats.pig_count,
-                            "classifications": last_stats.classifications,
-                            "avg_thermal_c": last_stats.avg_thermal_c,
-                            "models_loaded": models_loaded(),
-                        },
-                        "detections": [
-                            {
-                                "bbox": list(d.bbox),
-                                "conf": d.confidence,
-                                "cls": d.classification,
-                                "cls_conf": d.class_confidence,
-                            }
-                            for d in last_dets
-                        ],
-                    },
+        consecutive_read_failures = 0
+        try:
+            while not stop_event.is_set():
+                ok, frame = cap.read()
+                if not ok:
+                    consecutive_read_failures += 1
+                    if consecutive_read_failures >= _READ_FAILURES_BEFORE_RECONNECT:
+                        log.warning(
+                            "webcam: %d consecutive frame reads failed; "
+                            "restarting VideoCapture",
+                            consecutive_read_failures,
+                        )
+                        break
+                    log.warning(
+                        "webcam: frame read failed (%d/%d), retrying in %.1f seconds",
+                        consecutive_read_failures,
+                        _READ_FAILURES_BEFORE_RECONNECT,
+                        _READ_RETRY_DELAY_S,
+                    )
+                    stop_event.wait(_READ_RETRY_DELAY_S)
+                    continue
+
+                consecutive_read_failures = 0
+
+                frame_idx += 1
+
+                # Run inference on every Nth frame to bound CPU usage
+                if frame_idx % config.INFERENCE_EVERY_N_FRAMES == 0:
+                    try:
+                        last_dets = detect_and_classify(frame)
+                        last_stats = _build_stats(last_dets)
+                        last_stats.avg_thermal_c = _compute_avg_thermal()
+                    except Exception as e:
+                        log.exception("inference failed: %s", e)
+
+                # Always annotate using last detections so the stream stays smooth
+                annotated = _annotate(frame, last_dets) if last_dets else frame
+                jpg = _jpg_encode(annotated)
+
+                state.set_webcam(
+                    jpeg=jpg,
+                    dets=[
+                        PigLive(
+                            bbox=list(d.bbox),
+                            detection_conf=d.confidence,
+                            classification=d.classification,
+                            class_confidence=d.class_confidence,
+                        ) for d in last_dets
+                    ],
+                    stats=last_stats,
                 )
-            except Exception as e:
-                log.debug("broadcast webcam_frame failed: %s", e)
-    finally:
-        cap.release()
-        log.info("webcam: loop stopped, capture released")
+
+                # Throttle broadcasts (no need to flood clients if FPS > broadcast cap)
+                now_ms = int(time.time() * 1000)
+                if now_ms - last_emit_ms < config.WEBCAM_BROADCAST_MIN_MS:
+                    continue
+                last_emit_ms = now_ms
+
+                try:
+                    broadcast(
+                        "webcam_frame",
+                        {
+                            "img": "data:image/jpeg;base64," + base64.b64encode(jpg).decode("ascii"),
+                            "t": int(time.time() * 1000),
+                            "stats": {
+                                "pig_count": last_stats.pig_count,
+                                "classifications": last_stats.classifications,
+                                "avg_thermal_c": last_stats.avg_thermal_c,
+                                "models_loaded": models_loaded(),
+                            },
+                            "detections": [
+                                {
+                                    "bbox": list(d.bbox),
+                                    "conf": d.confidence,
+                                    "cls": d.classification,
+                                    "cls_conf": d.class_confidence,
+                                }
+                                for d in last_dets
+                            ],
+                        },
+                    )
+                except Exception as e:
+                    log.debug("broadcast webcam_frame failed: %s", e)
+        finally:
+            cap.release()
+            log.info("webcam: capture released")
+
+        if not stop_event.is_set():
+            log.info("webcam: reopening capture in %.1f seconds", _RECONNECT_DELAY_S)
+            stop_event.wait(_RECONNECT_DELAY_S)

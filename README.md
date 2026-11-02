@@ -53,6 +53,8 @@ Restart the backend with `.\scripts\run_backend.ps1`, then check `http://<mini-P
 
 The ESP32 sends each thermal frame to `/thermal` as an HTTP POST with a JSON body containing `t`, `ambient`, and the 768-element `temps` array. The backend validates it and broadcasts it to browsers over `/ws/stream` as a `thermal_frame` event. The WebSocket `/ws/thermal` endpoint remains available for compatible devices.
 
+The backend webcam capture automatically reopens the camera after five consecutive failed frame reads and retries if the camera cannot be opened. The ESP32 reinitializes its UART receiver if no valid thermal frame arrives for 15 seconds; this resets the ESP32-side serial link, not the thermal module's power.
+
 To start the apps automatically at user logon:
 
 ```powershell

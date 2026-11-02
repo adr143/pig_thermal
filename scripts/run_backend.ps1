@@ -3,6 +3,11 @@
 #    Dev mode (default):  .\scripts\run_backend.ps1
 #    Prod mode (debug disabled): $env:PIGMON_PROD='1'; .\scripts\run_backend.ps1
 # ============================================================
+param(
+    [string]$HostAddress = "0.0.0.0",
+    [int]$Port = 5000
+)
+
 $ErrorActionPreference = "Stop"
 
 $ProjectDir = Resolve-Path "$PSScriptRoot\.."
@@ -15,6 +20,9 @@ if (-not (Test-Path $PythonExe)) {
 }
 
 Write-Host "[run] starting Flask backend from $ServerDir" -ForegroundColor Cyan
+Write-Host "[run] binding backend to $HostAddress`:$Port" -ForegroundColor Cyan
+$env:HOST = $HostAddress
+$env:PORT = "$Port"
 Set-Location $ServerDir
 & $PythonExe app.py
 if ($LASTEXITCODE -ne 0) {

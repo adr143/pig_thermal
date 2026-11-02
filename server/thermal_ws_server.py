@@ -20,13 +20,20 @@ from websocket_hub import broadcast, origin_allowed, send_event
 log = logging.getLogger("thermal")
 _last_broadcast_ms = 0
 _broadcast_lock = threading.Lock()
+_received_frame_count = 0
+_received_frame_count_lock = threading.Lock()
+# ArduinoWebsockets/TinyWebsocket sends its library identifier as Origin.
+_ESP32_LIBRARY_ORIGIN = "https:github.com/gilmaimon/TinyWebsocket"
 
 
 def register_thermal_route(sock: Sock) -> None:
     @sock.route("/ws/thermal")
     def thermal_socket(ws: Any) -> None:
         origin = request.headers.get("Origin")
-        if not origin_allowed(origin, config.CORS_ORIGINS):
+        if (
+            not origin_allowed(origin, config.CORS_ORIGINS)
+            and origin != _ESP32_LIBRARY_ORIGIN
+        ):
             log.warning("thermal: rejected WebSocket origin %s", origin)
             ws.close(reason=1008, message="origin not allowed")
             return
@@ -102,7 +109,23 @@ def handle_thermal_message(message: Any) -> None:
         ambient=ambient,
         received_at=received_at,
     ))
+    _log_frame_received(temps_f, ambient)
     _broadcast_to_browsers(temps_f, ambient, received_at)
+
+
+def _log_frame_received(temps: List[float], ambient: float) -> None:
+    global _received_frame_count
+    with _received_frame_count_lock:
+        _received_frame_count += 1
+        frame_count = _received_frame_count
+    if frame_count == 1 or frame_count % 20 == 0:
+        log.info(
+            "thermal: received frame #%d ambient=%.1fC range=%.1f-%.1fC",
+            frame_count,
+            ambient,
+            min(temps),
+            max(temps),
+        )
 
 
 def _broadcast_to_browsers(temps: List[float], ambient: float, received_at: float) -> None:

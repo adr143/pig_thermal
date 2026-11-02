@@ -11,7 +11,7 @@ type ViewMode = "webcam" | "thermal" | "split";
 
 export default function Page() {
   const stream = useStream();
-  const [view, setView] = useState<ViewMode>("webcam");
+  const [view, setView] = useState<ViewMode>("split");
 
   // Use serverInfo or live stats; compute displayable fields
   const thermalClients = stream.serverInfo?.thermal_clients ?? 0;

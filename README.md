@@ -41,7 +41,15 @@ Start the backend and web app in separate PowerShell windows:
 .\scripts\run_web.ps1
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Next.js proxies HTTP API requests to Flask. The browser connects directly to Flask at `ws://<page-host>:5000/ws/stream`; set `NEXT_PUBLIC_WS_BASE` in `web\.env.local` if Flask is on another host or accessed through TLS. Add the dashboard's origin to `CORS_ORIGINS` in `server\.env`.
+Open [http://localhost:3000](http://localhost:3000). Next.js proxies HTTP API requests to Flask. The browser connects directly to Flask at `ws://<page-host>:5000/ws/stream`; this is separate from the ESP32 connection to `/ws/thermal`. If you open the dashboard using the mini-PC LAN address (for example `http://192.168.0.103:3000`), add that exact origin to `CORS_ORIGINS` in `server\.env`. Restart the backend after changing it. Set `NEXT_PUBLIC_WS_BASE` in `web\.env.local` if Flask is on another host or accessed through TLS.
+
+The Windows backend launcher binds to `0.0.0.0:5000` so other devices on the LAN can reach it. To allow inbound connections through Windows Defender Firewall on a **Private** network, open an Administrator PowerShell at the project root and run:
+
+```powershell
+.\scripts\allow_backend_firewall.ps1
+```
+
+Restart the backend with `.\scripts\run_backend.ps1`, then check `http://<mini-PC-IP>:5000/` from another device (for example `http://192.168.0.103:5000/`). It should return backend status JSON. The dashboard WebSocket is `ws://<mini-PC-IP>:5000/ws/stream`. If it still reports `Invalid frame header`, verify the status URL returns JSON from the mini-PC and that the backend console shows `starting Pig Monitoring backend (dev) on 0.0.0.0:5000`; those checks confirm whether the client is reaching this Flask process.
 
 The ESP32 connects directly to `ws://<mini-PC-IP>:5000/ws/thermal` and sends each thermal frame as a raw WebSocket text message containing JSON: `{"type":"frame","t":1234,"ambient":24.5,"temps":[...]}`. The browser stream at `/ws/stream` also uses raw WebSocket JSON messages, with a top-level `type` such as `thermal_frame`, `webcam_frame`, or `snapshot_taken`.
 

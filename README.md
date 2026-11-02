@@ -41,7 +41,7 @@ Start the backend and web app in separate PowerShell windows:
 .\scripts\run_web.ps1
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Next.js proxies HTTP API requests to Flask. The browser connects directly to Flask at `ws://<page-host>:5000/ws/stream`; the ESP32 thermal input reaches Flask separately over the configured USB serial connection. If you open the dashboard using the mini-PC LAN address (for example `http://192.168.0.103:3000`), add that exact origin to `CORS_ORIGINS` in `server\.env`. Restart the backend after changing it. Set `NEXT_PUBLIC_WS_BASE` in `web\.env.local` if Flask is on another host or accessed through TLS.
+Open [http://localhost:3000](http://localhost:3000). Next.js proxies HTTP API requests to Flask. The browser connects directly to Flask at `ws://<page-host>:5000/ws/stream`; the ESP32 thermal input reaches Flask separately over the configured USB serial connection. WebSocket origins are allowed from any origin by default (`CORS_ORIGINS=*`). Set `NEXT_PUBLIC_WS_BASE` in `web\.env.local` if Flask is on another host or accessed through TLS.
 
 The Windows backend launcher binds to `0.0.0.0:5000` so other devices on the LAN can reach it. To allow inbound connections through Windows Defender Firewall on a **Private** network, open an Administrator PowerShell at the project root and run:
 

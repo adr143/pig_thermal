@@ -36,7 +36,7 @@ class Config:
     CORS_ORIGINS: List[str] = field(
         default_factory=lambda: [
             o.strip()
-            for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+            for o in os.getenv("CORS_ORIGINS", "*").split(",")
             if o.strip()
         ]
     )

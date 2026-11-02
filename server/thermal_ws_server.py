@@ -9,7 +9,7 @@ import time
 from typing import Any, List
 
 import numpy as np
-from flask import request
+from flask import Flask, request
 from flask_sock import Sock
 from simple_websocket import ConnectionClosed
 
@@ -22,6 +22,20 @@ _last_broadcast_ms = 0
 _broadcast_lock = threading.Lock()
 _received_frame_count = 0
 _received_frame_count_lock = threading.Lock()
+
+
+def register_thermal_http_route(app: Flask) -> None:
+    @app.route("/thermal", methods=["POST"])
+    def thermal_http_post():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return {"error": "expected a JSON object"}, 400
+
+        # The ESP32 HTTP payload omits "type"; WebSocket clients send it.
+        data.setdefault("type", "frame")
+        if not handle_thermal_message(data, source="HTTP POST"):
+            return {"error": "invalid thermal frame"}, 400
+        return {"ok": True}, 200
 
 
 def register_thermal_route(sock: Sock) -> None:
@@ -47,33 +61,37 @@ def register_thermal_route(sock: Sock) -> None:
             log.info("thermal: ESP32 disconnected (clients=%d)", clients)
 
 
-def handle_thermal_message(message: Any, source: str = "websocket") -> None:
+def handle_thermal_message(message: Any, source: str = "websocket") -> bool:
     if isinstance(message, bytes):
         try:
             message = message.decode("utf-8")
         except UnicodeDecodeError:
             log.warning("thermal: received non-UTF-8 binary frame")
-            return
+            return False
     if not isinstance(message, str):
-        log.warning("thermal: received unsupported message type")
-        return
+        if isinstance(message, dict):
+            data = message
+        else:
+            log.warning("thermal: received unsupported message type")
+            return False
+    else:
+        try:
+            data = json.loads(message)
+        except json.JSONDecodeError:
+            log.warning("thermal: received invalid JSON")
+            return False
 
-    try:
-        data = json.loads(message)
-    except json.JSONDecodeError:
-        log.warning("thermal: received invalid JSON")
-        return
     if not isinstance(data, dict):
         log.warning("thermal: expected a JSON object")
-        return
+        return False
 
     message_type = data.get("type")
     if message_type == "heartbeat":
         log.debug("thermal: heartbeat from ESP32")
-        return
+        return True
     if message_type != "frame":
         log.debug("thermal: ignoring message type %r", message_type)
-        return
+        return False
 
     temps = data.get("temps")
     expected_count = config.THERMAL_WIDTH * config.THERMAL_HEIGHT
@@ -81,16 +99,16 @@ def handle_thermal_message(message: Any, source: str = "websocket") -> None:
         log.warning("thermal: bad temps length=%s (expected %d)",
                     len(temps) if isinstance(temps, list) else None,
                     expected_count)
-        return
+        return False
     try:
         temps_f: List[float] = [float(temp) for temp in temps]
         ambient = float(data.get("ambient", 0.0))
     except (TypeError, ValueError):
         log.warning("thermal: non-numeric temperature received")
-        return
+        return False
     if not math.isfinite(ambient) or not all(math.isfinite(temp) for temp in temps_f):
         log.warning("thermal: non-finite temperature received")
-        return
+        return False
 
     received_at = time.time()
     state.set_thermal(ThermalFrame(
@@ -100,6 +118,7 @@ def handle_thermal_message(message: Any, source: str = "websocket") -> None:
     ))
     _log_frame_received(temps_f, ambient, source)
     _broadcast_to_browsers(temps_f, ambient, received_at)
+    return True
 
 
 def _log_frame_received(temps: List[float], ambient: float, source: str) -> None:

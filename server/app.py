@@ -50,6 +50,7 @@ app.config["SOCK_SERVER_OPTIONS"] = {
 }
 sock = Sock(app)
 thermal_ws_server.register_thermal_route(sock)
+thermal_ws_server.register_thermal_http_route(app)
 stream_ws_server.register_stream_route(sock)
 
 # ---------------------------------------------------------------------------

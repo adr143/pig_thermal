@@ -11,9 +11,8 @@ from flask import request
 from flask_sock import Sock
 from simple_websocket import ConnectionClosed
 
-from config import config
 from live_state import state
-from websocket_hub import send_event, origin_allowed, subscribe, unsubscribe
+from websocket_hub import send_event, subscribe, unsubscribe
 
 log = logging.getLogger("stream")
 
@@ -21,12 +20,6 @@ log = logging.getLogger("stream")
 def register_stream_route(sock: Sock) -> None:
     @sock.route("/ws/stream")
     def stream_socket(ws: Any) -> None:
-        origin = request.headers.get("Origin")
-        if not origin_allowed(origin, config.CORS_ORIGINS):
-            log.warning("stream: rejected WebSocket origin %s", origin)
-            ws.close(reason=1008, message="origin not allowed")
-            return
-
         client_queue = subscribe()
         clients = state.inc_browser_client()
         log.info("browser connected from %s (clients=%d)",

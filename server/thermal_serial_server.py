@@ -66,7 +66,7 @@ def _read_serial_frames(stop_event: threading.Event) -> None:
                         if not message.startswith("{"):
                             log.debug("thermal serial: ignored device diagnostic")
                             continue
-                        handle_thermal_message(message)
+                        handle_thermal_message(message, source="serial/ESP32")
                 finally:
                     clients = state.dec_thermal_client()
                     log.info("thermal serial disconnected (clients=%d)", clients)

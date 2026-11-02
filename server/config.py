@@ -6,8 +6,7 @@ All values can be overridden via environment variables (see .env file).
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
@@ -33,14 +32,6 @@ class Config:
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = _int_env("PORT", 5000)
     DEBUG: bool = _bool_env("DEBUG", False)
-    CORS_ORIGINS: List[str] = field(
-        default_factory=lambda: [
-            o.strip()
-            for o in os.getenv("CORS_ORIGINS", "*").split(",")
-            if o.strip()
-        ]
-    )
-
     # ----- Database -----
     DB_PATH: str = os.getenv("DB_PATH", "pigs.db")
 

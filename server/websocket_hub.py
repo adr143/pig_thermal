@@ -68,14 +68,6 @@ def client_count() -> int:
         return len(_clients)
 
 
-def origin_allowed(origin: str | None, allowed_origins: list[str]) -> bool:
-    return (
-        origin is None
-        or "*" in allowed_origins
-        or origin in allowed_origins
-    )
-
-
 def send_event(event: str, payload: dict[str, Any]) -> str:
     return json.dumps({"type": event, **payload}, separators=(",", ":"), allow_nan=False)
 

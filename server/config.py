@@ -76,6 +76,8 @@ class Config:
     # Thermal frame is 32x24 from MLX90640
     THERMAL_WIDTH: int = 32
     THERMAL_HEIGHT: int = 24
+    THERMAL_SERIAL_PORT: str = os.getenv("THERMAL_SERIAL_PORT", "COM3").strip()
+    THERMAL_SERIAL_BAUD: int = _int_env("THERMAL_SERIAL_BAUD", 115200)
     # Pixels above this threshold are considered "pig body" for avg-temp proxy
     # Adjust to your environment (typical pig surface temp ~ 32-38 C)
     THERMAL_PIG_THRESHOLD_C: float = _float_env("THERMAL_PIG_THRESHOLD_C", 30.0)

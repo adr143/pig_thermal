@@ -24,6 +24,7 @@ APScheduler==3.10.4
 # Misc
 python-dotenv==1.0.1
 requests==2.32.3
+pyserial==3.5
 
 # Optional: install torch with CUDA if your mini-PC has a GPU
 #   pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121

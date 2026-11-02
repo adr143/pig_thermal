@@ -6,8 +6,8 @@ Modules:
   - webcam_state    : last webcam JPEG (annotated) + detections + stats
   - snapshot hub    : channels for streaming to browser clients
 
-This is a thin in-memory cache. Raw WebSocket broadcasts happen in
-stream_ws_server.py (webcam thread) and thermal_ws_server.py (ESP32 receive).
+This is a thin in-memory cache. Browser broadcasts are handled by
+stream_ws_server.py; thermal input is handled by the serial and WebSocket receivers.
 """
 from __future__ import annotations
 
@@ -60,9 +60,9 @@ class LiveState:
         self.webcam_detections: List[PigLive] = []
         self.webcam_stats = WebcamStats()
 
-        # Current browser and ESP32 WebSocket connection counts.
+        # Current browser and thermal transport connection counts.
         self.browser_clients: int = 0
-        self.thermal_clients: int = 0  # ESP32 nodes connected
+        self.thermal_clients: int = 0
 
     # -- thermal --
     def set_thermal(self, frame: ThermalFrame) -> None:

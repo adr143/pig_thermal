@@ -379,6 +379,37 @@ bool processFrame() {
   }
   latestAmbient = latestTempsRaw[0];   // pixel 0 = ambient
 
+  // ---- Row fixed-pattern noise correction (MLX90640 row banding fix) ----
+  // The MLX90640 sensor has inherent row-to-row gain/offset variation that
+  // creates visible horizontal bands/stripes in the image. This is a known
+  // characteristic of microbolometer sensors. We normalize each row by:
+  //   1. Computing the global mean of all 256 pixels
+  //   2. Computing the mean of each of the 16 rows
+  //   3. Subtracting (rowMean - globalMean) from each pixel in that row
+  // This flattens all rows to the same baseline, eliminating the horizontal
+  // banding while preserving the actual thermal image content.
+  //
+  // We use pixels 1..255 (skipping pixel 0 = ambient) for the mean
+  // calculations so the ambient doesn't skew the statistics.
+  float globalSum = 0.0f;
+  for (size_t i = 1; i < RAW_PIXEL_COUNT; i++) globalSum += latestTempsRaw[i];
+  float globalMean = globalSum / (RAW_PIXEL_COUNT - 1);
+
+  for (size_t row = 0; row < 16; row++) {
+    float rowSum = 0.0f;
+    for (size_t col = 0; col < 16; col++) {
+      size_t idx = row * 16 + col;
+      if (idx > 0) rowSum += latestTempsRaw[idx];   // skip pixel 0 (ambient)
+    }
+    // Row 0 has 15 pixels (excluding ambient); other rows have 16
+    float rowMean = rowSum / (row == 0 ? 15.0f : 16.0f);
+    float rowOffset = rowMean - globalMean;
+    for (size_t col = 0; col < 16; col++) {
+      size_t idx = row * 16 + col;
+      if (idx > 0) latestTempsRaw[idx] -= rowOffset;
+    }
+  }
+
   // ---- Expand 16x16 (256 pixels) to 32x24 (768 pixels) by BILINEAR interpolation ----
   // Nearest-neighbor made the image look extremely blocky (visible 2x2 squares).
   // Bilinear interpolation computes a weighted average of the 4 nearest input

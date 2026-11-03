@@ -55,6 +55,8 @@ The ESP32 sends each thermal frame to `/thermal` as an HTTP POST with a JSON bod
 
 The backend webcam capture automatically reopens the camera after five consecutive failed frame reads and retries if the camera cannot be opened. The ESP32 reinitializes its UART receiver if no valid thermal frame arrives for 15 seconds; this resets the ESP32-side serial link, not the thermal module's power.
 
+The dashboard shows the latest snapshot; use **Snapshot history** to browse the saved database records in a table and open each snapshot's image and details. Objects without a classification label are excluded from the live detection feed and new snapshots.
+
 To start the apps automatically at user logon:
 
 ```powershell

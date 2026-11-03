@@ -145,23 +145,6 @@ export default function Page() {
             </div>
           )}
 
-          {/* Snapshot preview toast when triggered */}
-          {stream.lastSnapshot && (
-            <div className="card border-accent/40">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-100">
-                    Latest snapshot #{stream.lastSnapshot.snapshot_id}
-                  </div>
-                  <div className="text-xs text-gray-400 font-mono">
-                    {stream.lastSnapshot.captured_at} ·{" "}
-                    {stream.lastSnapshot.source} ·{" "}
-                    {stream.lastSnapshot.pig_count} pigs
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right: stats + snapshot panel */}

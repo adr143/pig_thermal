@@ -152,16 +152,23 @@ def classify_crop(crop_bgr: np.ndarray) -> Tuple[Optional[str], Optional[float]]
 
 def detect_and_classify(frame_bgr: np.ndarray) -> List[PigDetection]:
     """
-    One-shot detect + classify. Each pig crop is classified.
-    Mutates PigDetection.classification / class_confidence fields.
+    One-shot detect + classify. Only labeled detections are returned so
+    unclassified objects are excluded from both the live feed and snapshots.
     """
     dets = detect_pigs(frame_bgr)
     if not dets or _CLASSIFY_MODEL is None:
-        return dets
+        return []
     for d in dets:
         x1, y1, x2, y2 = d.bbox
         crop = frame_bgr[y1:y2, x1:x2]
         label, conf = classify_crop(crop)
         d.classification = label
         d.class_confidence = conf
-    return dets
+    return [
+        detection
+        for detection in dets
+        if detection.classification
+        and detection.classification.strip()
+        and detection.classification.strip().casefold()
+        not in {"unlabeled", "unlabelled"}
+    ]

@@ -29,12 +29,27 @@ export default function ThermalView({
   height = 24,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Offscreen canvas at native thermal resolution (32x24).
+  // We draw raw pixels here, then use drawImage() with imageSmoothingEnabled
+  // to upscale smoothly to the visible canvas. This eliminates the horizontal
+  // banding caused by fillRect() drawing discrete rectangles.
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    // Lazily create the offscreen canvas at native thermal resolution
+    if (!offscreenRef.current) {
+      offscreenRef.current = document.createElement("canvas");
+      offscreenRef.current.width = width;
+      offscreenRef.current.height = height;
+    }
+    const off = offscreenRef.current;
+    const offCtx = off.getContext("2d");
+    if (!offCtx) return;
 
     if (!temps || temps.length !== width * height) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -46,27 +61,51 @@ export default function ThermalView({
     const hi = stats?.max_c ?? Math.max(...temps);
     const range = Math.max(1, hi - lo);
 
-    // Render scaled up (32x24 -> 320x240)
-    const cellW = canvas.width / width;
-    const cellH = canvas.height / height;
+    // ---- Step 1: Draw 32x24 raw pixels on the offscreen canvas ----
+    // This puts one ImageData pixel per thermal pixel. No rectangles, no gaps.
+    const imgData = offCtx.createImageData(width, height);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const v = temps[y * width + x];
         const t = (v - lo) / range;
         const [r, g, b] = colormap(t);
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(x * cellW, y * cellH, cellW + 1, cellH + 1);
+        const pixIdx = (y * width + x) * 4;
+        imgData.data[pixIdx] = r;
+        imgData.data[pixIdx + 1] = g;
+        imgData.data[pixIdx + 2] = b;
+        imgData.data[pixIdx + 3] = 255;
       }
     }
+    offCtx.putImageData(imgData, 0, 0);
 
-    // Optional: draw value labels every few cells
-    ctx.font = "8px monospace";
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    for (let y = 0; y < height; y += 4) {
-      for (let x = 0; x < width; x += 4) {
-        const v = temps[y * width + x];
-        const t = `${v.toFixed(0)}`;
-        ctx.fillText(t, x * cellW + 2, y * cellH + 9);
+    // ---- Step 2: Upscale smoothly to the visible canvas ----
+    // imageSmoothingEnabled = true makes the browser bilinear-interpolate
+    // the 32x24 image up to the canvas size, producing a smooth gradient
+    // with no visible cell boundaries or horizontal bands.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+
+    // ---- Step 3 (optional): draw sparse value labels ----
+    // Only every 4th cell, and only if the canvas is large enough.
+    // These overlay on top of the smooth image without disrupting it.
+    if (canvas.width >= 320) {
+      ctx.font = "9px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const cellW = canvas.width / width;
+      const cellH = canvas.height / height;
+      for (let y = 2; y < height; y += 4) {
+        for (let x = 2; x < width; x += 4) {
+          const v = temps[y * width + x];
+          const t = (v - lo) / range;
+          const [r, g, b] = colormap(t);
+          // Pick text color for contrast against the background
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          ctx.fillStyle = lum > 128 ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.85)";
+          ctx.fillText(v.toFixed(0), x * cellW + cellW / 2, y * cellH + cellH / 2);
+        }
       }
     }
   }, [temps, stats, width, height]);
@@ -92,10 +131,17 @@ export default function ThermalView({
       </div>
       <canvas
         ref={canvasRef}
-        width={320}
-        height={240}
+        width={640}
+        height={480}
         className="w-full rounded-md bg-black border border-slate-800"
-        style={{ aspectRatio: "32 / 24", imageRendering: "pixelated" }}
+        style={{
+          aspectRatio: "32 / 24",
+          // IMPORTANT: do NOT use imageRendering: "pixelated" — that causes
+          // the horizontal banding by disabling browser-side smoothing.
+          // "auto" (the default) lets the browser bilinear-interpolate the
+          // canvas when it's scaled to fit the container.
+          imageRendering: "auto",
+        }}
       />
       {/* Color legend */}
       <div

@@ -1,8 +1,3 @@
-#!/usr/bin/env bash
-# ============================================================
-#  Pig Monitoring System — Setup script
-#  Run once on the mini-PC.
-# ============================================================
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -11,30 +6,25 @@ WEB_DIR="$PROJECT_DIR/web"
 
 echo "[setup] project: $PROJECT_DIR"
 
-# 1. Python venv
 if ! command -v python3 >/dev/null 2>&1; then
     echo "[setup] python3 not found. Install Python 3.10+ first."
     exit 1
 fi
 echo "[setup] creating python venv at $SERVER_DIR/.venv"
 python3 -m venv "$SERVER_DIR/.venv"
-# shellcheck disable=SC1091
 source "$SERVER_DIR/.venv/bin/activate"
 echo "[setup] installing python deps (this may take a few minutes)"
 pip install --upgrade pip
 pip install -r "$SERVER_DIR/requirements.txt"
 
-# 2. Env file
 if [ ! -f "$SERVER_DIR/.env" ]; then
     echo "[setup] copying server/.env.example -> server/.env"
     cp "$SERVER_DIR/.env.example" "$SERVER_DIR/.env"
 fi
 
-# 3. Snapshots directory
 mkdir -p "$SERVER_DIR/snapshots"
 mkdir -p "$SERVER_DIR/models"
 
-# 4. Node deps
 if command -v npm >/dev/null 2>&1; then
     echo "[setup] installing next.js deps"
     (cd "$WEB_DIR" && npm install)

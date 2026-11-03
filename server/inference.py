@@ -1,12 +1,3 @@
-"""
-YOLO inference wrapper.
-
-Loads two Ultralytics models:
-  - DETECT_MODEL_PATH : object detection (pigs)
-  - CLASSIFY_MODEL_PATH: classification (pig class)
-
-Falls back gracefully if model files are missing (config.ALLOW_MISSING_MODELS).
-"""
 from __future__ import annotations
 
 import logging
@@ -22,7 +13,7 @@ from config import config
 
 log = logging.getLogger("inference")
 
-# Lazy-imported so the app can boot even without ultralytics installed
+
 _DETECT_MODEL = None
 _CLASSIFY_MODEL = None
 _MODELS_OK = False
@@ -31,7 +22,7 @@ _LOAD_LOCK = threading.Lock()
 
 @dataclass
 class PigDetection:
-    bbox: Tuple[int, int, int, int]      # x1, y1, x2, y2 in source-pixel coords
+    bbox: Tuple[int, int, int, int]
     confidence: float
     classification: Optional[str] = None
     class_confidence: Optional[float] = None
@@ -42,13 +33,12 @@ def models_loaded() -> bool:
 
 
 def load_models() -> None:
-    """Lazy-load models. Safe to call multiple times."""
     global _DETECT_MODEL, _CLASSIFY_MODEL, _MODELS_OK
     with _LOAD_LOCK:
         if _MODELS_OK:
             return
         try:
-            from ultralytics import YOLO  # noqa
+            from ultralytics import YOLO
         except ImportError as e:
             log.warning("ultralytics not installed (%s); inference disabled", e)
             return
@@ -82,10 +72,6 @@ def load_models() -> None:
 
 
 def detect_pigs(frame_bgr: np.ndarray) -> List[PigDetection]:
-    """
-    Run pig detection on a BGR frame. Returns list of detections.
-    Empty list if detector missing or no confident hits.
-    """
     if _DETECT_MODEL is None:
         return []
     try:
@@ -95,7 +81,7 @@ def detect_pigs(frame_bgr: np.ndarray) -> List[PigDetection]:
             iou=config.DETECT_IOU,
             imgsz=config.DETECT_IMG_SIZE,
             verbose=False,
-            device="cpu",   # change to 0 for CUDA, "mps" for Apple Silicon
+            device="cpu",
         )
     except Exception as e:
         log.exception("detect failed: %s", e)
@@ -110,7 +96,7 @@ def detect_pigs(frame_bgr: np.ndarray) -> List[PigDetection]:
         confs = boxes.conf.cpu().numpy() if hasattr(boxes.conf, "cpu") else np.asarray(boxes.conf)
         for (x1, y1, x2, y2), conf in zip(xyxy, confs):
             x1i, y1i, x2i, y2i = map(int, (x1, y1, x2, y2))
-            # Clamp to image bounds
+
             x1i = max(0, min(frame_bgr.shape[1] - 1, x1i))
             y1i = max(0, min(frame_bgr.shape[0] - 1, y1i))
             x2i = max(0, min(frame_bgr.shape[1], x2i))
@@ -122,10 +108,6 @@ def detect_pigs(frame_bgr: np.ndarray) -> List[PigDetection]:
 
 
 def classify_crop(crop_bgr: np.ndarray) -> Tuple[Optional[str], Optional[float]]:
-    """
-    Run classification on a BGR crop. Returns (label, confidence) or
-    (None, None) if classifier missing.
-    """
     if _CLASSIFY_MODEL is None or crop_bgr.size == 0:
         return None, None
     try:
@@ -151,10 +133,6 @@ def classify_crop(crop_bgr: np.ndarray) -> Tuple[Optional[str], Optional[float]]
 
 
 def detect_and_classify(frame_bgr: np.ndarray) -> List[PigDetection]:
-    """
-    One-shot detect + classify. Only labeled detections are returned so
-    unclassified objects are excluded from both the live feed and snapshots.
-    """
     dets = detect_pigs(frame_bgr)
     if not dets or _CLASSIFY_MODEL is None:
         return []

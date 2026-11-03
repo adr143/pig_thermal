@@ -1,7 +1,3 @@
-# ============================================================
-#  Remove the PigMonitor scheduled tasks created by
-#  install_autostart.ps1
-# ============================================================
 $ErrorActionPreference = "Stop"
 
 foreach ($task in @("PigMonitorBackend", "PigMonitorWeb")) {
@@ -14,7 +10,6 @@ foreach ($task in @("PigMonitorBackend", "PigMonitorWeb")) {
     }
 }
 
-# Clean up wrapper scripts
 $ProjectDir = Resolve-Path "$PSScriptRoot\.."
 foreach ($w in @("_run_backend_wrapper.ps1", "_run_web_wrapper.ps1")) {
     $p = Join-Path $ProjectDir "scripts\$w"

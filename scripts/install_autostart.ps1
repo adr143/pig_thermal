@@ -1,12 +1,3 @@
-# ============================================================
-#  Install Windows Task Scheduler entries to auto-start the
-#  backend + web UI on login (or at boot, optional).
-#
-#  USAGE:
-#    .\scripts\install_autostart.ps1            # auto-start at user login
-#    .\scripts\install_autostart.ps1 -AtBoot    # auto-start at system boot (needs admin)
-#    .\scripts\uninstall_autostart.ps1          # remove scheduled tasks
-# ============================================================
 
 param(
     [switch]$AtBoot = $false
@@ -31,21 +22,18 @@ if (-not (Test-Path $PythonExe)) {
     exit 1
 }
 
-# Wrapper script for the backend so Task Scheduler has a clean target
 $BackendWrapper = Join-Path $ProjectDir "scripts\_run_backend_wrapper.ps1"
 @"
 Set-Location '$ServerDir'
 & '$PythonExe' app.py
 "@ | Set-Content -Path $BackendWrapper -Encoding UTF8
 
-# Wrapper for the web UI
 $WebWrapper = Join-Path $ProjectDir "scripts\_run_web_wrapper.ps1"
 @"
 Set-Location '$WebDir'
 & '$NpmExe' run dev
 "@ | Set-Content -Path $WebWrapper -Encoding UTF8
 
-# Trigger: at user logon (default) or at system boot
 if ($AtBoot) {
     $Trigger = New-ScheduledTaskTrigger -AtStartup
     $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
@@ -56,10 +44,8 @@ if ($AtBoot) {
     Write-Host "[install] creating tasks to start at LOGON" -ForegroundColor Cyan
 }
 
-# Restart on failure
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
 
-# --- Backend task ---
 $BackendAction = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$BackendWrapper`""
@@ -73,7 +59,6 @@ Register-ScheduledTask `
     -Description "Pig Monitoring System — Flask backend (port 5000)" `
     -Force | Out-Null
 
-# --- Web UI task ---
 $WebAction = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WebWrapper`""

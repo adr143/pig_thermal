@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-# Start the Next.js dev server.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

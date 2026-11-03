@@ -123,7 +123,7 @@ export function useStream(): StreamState {
             });
             break;
           case "stats_update":
-            // optional; webcam_frame also carries stats
+
             break;
           case "snapshot_taken":
             setLastSnapshot(data);

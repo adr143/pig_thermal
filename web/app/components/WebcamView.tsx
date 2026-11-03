@@ -15,7 +15,7 @@ export default function WebcamView({ img, detections }: Props) {
     <div className="flex flex-col gap-2">
       <div className="relative w-full bg-black rounded-md overflow-hidden border border-slate-800">
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
+
           <img
             src={img}
             alt="webcam stream"

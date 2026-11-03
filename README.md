@@ -87,21 +87,16 @@ The backend systemd installer is `sudo bash scripts/linux/install_service.sh`. I
 - `scripts/` — Windows PowerShell setup, run, and autostart scripts.
 - `scripts/linux/` — Linux Bash equivalents.
 
-# One-time: allow PS scripts
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
-# Setup (creates venv, installs Python + npm deps)
 cd C:\path\to\pig-monitoring-system
 .\scripts\setup.ps1
 
-# Drop your models in
 Copy-Item C:\path\to\pig_detect.pt     server\models\pig_detect.pt
 Copy-Item C:\path\to\pig_classify.pt   server\models\pig_classify.pt
 
-# Start backend (Terminal 1)
 .\scripts\run_backend.ps1
 
-# Start web UI (Terminal 2)
 .\scripts\run_web.ps1
 
-# Open http://localhost:3000
+Open http://localhost:3000

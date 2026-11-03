@@ -1,14 +1,3 @@
-# ============================================================
-#  Pig Monitoring System — Windows Setup
-#  Run once in PowerShell on the mini-PC.
-# ============================================================
-#
-#  First time only: allow script execution for this user
-#    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-#
-#  Then run:
-#    .\scripts\setup.ps1
-# ============================================================
 
 $ErrorActionPreference = "Stop"
 
@@ -18,7 +7,6 @@ $WebDir      = Join-Path $ProjectDir "web"
 
 Write-Host "[setup] project: $ProjectDir"
 
-# --- 1. Python ---
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Error "[setup] python not found. Install Python 3.10+ from https://python.org (check 'Add to PATH' during install)."
     exit 1
@@ -41,17 +29,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "[setup] failed to install Python dependencies."
 }
 
-# --- 2. Env file ---
 if (-not (Test-Path "$ServerDir\.env")) {
     Write-Host "[setup] copying server\.env.example -> server\.env"
     Copy-Item "$ServerDir\.env.example" "$ServerDir\.env"
 }
 
-# --- 3. Snapshots + models dirs ---
 New-Item -ItemType Directory -Force -Path "$ServerDir\snapshots" | Out-Null
 New-Item -ItemType Directory -Force -Path "$ServerDir\models"   | Out-Null
 
-# --- 4. Node ---
 if (Get-Command npm -ErrorAction SilentlyContinue) {
     Write-Host "[setup] installing next.js deps"
     Push-Location $WebDir

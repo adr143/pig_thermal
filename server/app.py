@@ -1,17 +1,3 @@
-"""
-Flask app entry point.
-
-  - Defines routes (REST API)
-  - Serves raw WebSocket endpoints for ESP32 thermal input and browser streams
-  - Starts webcam thread + scheduler on boot
-  - Serves the snapshot JPEGs from disk
-
-Run:
-    cd server
-    python app.py
-
-Default port: 5000
-"""
 from __future__ import annotations
 
 import logging
@@ -29,18 +15,14 @@ from flask_sock import Sock
 from live_state import state
 from webcam import webcam_loop
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 log = logging.getLogger("app")
 
-# ---------------------------------------------------------------------------
-# Flask + raw WebSockets
-# ---------------------------------------------------------------------------
+
 app = Flask(__name__, static_folder=None)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "change-me-in-prod")
 app.config["CORS_HEADERS"] = "Content-Type"
@@ -53,9 +35,7 @@ thermal_ws_server.register_thermal_route(sock)
 thermal_ws_server.register_thermal_http_route(app)
 stream_ws_server.register_stream_route(sock)
 
-# ---------------------------------------------------------------------------
-# Background threads
-# ---------------------------------------------------------------------------
+
 _stop_event = threading.Event()
 _webcam_thread = None
 
@@ -72,9 +52,6 @@ def _start_background() -> None:
         log.info("webcam thread started")
 
 
-# ---------------------------------------------------------------------------
-# Routes: health + status
-# ---------------------------------------------------------------------------
 @app.route("/")
 def index():
     return jsonify({
@@ -101,9 +78,6 @@ def api_status():
     })
 
 
-# ---------------------------------------------------------------------------
-# Routes: snapshots
-# ---------------------------------------------------------------------------
 @app.route("/api/snapshots", methods=["GET"])
 def api_list_snapshots():
     limit = min(int(request.args.get("limit", 100)), 500)
@@ -162,9 +136,6 @@ def api_update_pig_temp(sid, pig_id):
     return jsonify({"ok": True, "pig_id": pig_id, "temperature_c": temp})
 
 
-# ---------------------------------------------------------------------------
-# Routes: schedule
-# ---------------------------------------------------------------------------
 @app.route("/api/schedule", methods=["GET"])
 def api_get_schedule():
     return jsonify(snapshot.get_schedule())
@@ -192,9 +163,6 @@ def api_update_schedule():
     return jsonify(new_state)
 
 
-# ---------------------------------------------------------------------------
-# Routes: thermal config
-# ---------------------------------------------------------------------------
 @app.route("/api/config/thermal", methods=["GET"])
 def api_get_thermal_config():
     return jsonify({
@@ -205,9 +173,6 @@ def api_get_thermal_config():
     })
 
 
-# ---------------------------------------------------------------------------
-# Routes: live single-frame fetch (HTTP fallback)
-# ---------------------------------------------------------------------------
 @app.route("/api/live/webcam.jpg")
 def api_live_webcam_jpg():
     jpeg, _, _ = state.get_webcam()
@@ -217,22 +182,14 @@ def api_live_webcam_jpg():
     return Response(jpeg, mimetype="image/jpeg")
 
 
-# ---------------------------------------------------------------------------
-# Boot
-# ---------------------------------------------------------------------------
 @app.before_request
 def _boot_check():
-    """Lazy-init background threads on first request."""
     if not getattr(app, "_inited", False):
         app._inited = True
         _start_background()
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 def _run_dev():
-    """Run the Flask-Sock app with Werkzeug's raw WebSocket support."""
     log.info("starting Pig Monitoring backend (dev) on %s:%d",
              config.HOST, config.PORT)
     _start_background()
@@ -250,7 +207,6 @@ def _run_dev():
 
 
 def _run_prod():
-    """Run with Flask debug mode disabled."""
     log.info("starting Pig Monitoring backend on %s:%d",
              config.HOST, config.PORT)
     _start_background()

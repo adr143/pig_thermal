@@ -1,4 +1,3 @@
-"""Thread-safe fan-out for raw browser WebSocket clients."""
 from __future__ import annotations
 
 import json

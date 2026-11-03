@@ -1,12 +1,3 @@
-"""
-Webcam capture thread.
-
-Continuously reads frames from the webcam, runs inference every Nth frame,
-annotates bounding boxes + class labels, JPEG-encodes, and emits
-'webcam_frame' events to connected raw WebSocket clients.
-
-Also computes pig count + classification stats and updates LiveState.
-"""
 from __future__ import annotations
 
 import base64
@@ -25,7 +16,7 @@ from websocket_hub import broadcast
 
 log = logging.getLogger("webcam")
 
-# Track inference models across reloads
+
 _MODELS_TRIED = False
 _READ_FAILURES_BEFORE_RECONNECT = 5
 _RECONNECT_DELAY_S = 2.0
@@ -44,9 +35,8 @@ def _ensure_models() -> None:
 
 
 def _annotate(frame: np.ndarray, dets) -> np.ndarray:
-    """Draw bboxes + labels on a copy of the frame."""
     out = frame.copy()
-    # Color palette for different classes
+
     palette = [
         (0, 255, 0), (255, 165, 0), (255, 0, 255),
         (255, 255, 0), (0, 255, 255), (160, 32, 240),
@@ -79,11 +69,6 @@ def _build_stats(dets) -> WebcamStats:
 
 
 def _compute_avg_thermal() -> Optional[float]:
-    """Compute avg temp of 'pig body' pixels (above threshold).
-
-    Falls back to avg of all pixels if not enough hot pixels.
-    Returns None if no thermal frame available.
-    """
     tf = state.get_thermal()
     if tf is None:
         return None
@@ -105,7 +90,6 @@ def _jpg_encode(frame: np.ndarray) -> bytes:
 
 
 def webcam_loop(stop_event) -> None:
-    """Main webcam capture + inference + broadcast loop. Runs in a thread."""
     _ensure_models()
 
     frame_idx = 0
@@ -159,7 +143,7 @@ def webcam_loop(stop_event) -> None:
 
                 frame_idx += 1
 
-                # Run inference on every Nth frame to bound CPU usage
+
                 if frame_idx % config.INFERENCE_EVERY_N_FRAMES == 0:
                     try:
                         last_dets = detect_and_classify(frame)
@@ -168,7 +152,7 @@ def webcam_loop(stop_event) -> None:
                     except Exception as e:
                         log.exception("inference failed: %s", e)
 
-                # Always annotate using last detections so the stream stays smooth
+
                 annotated = _annotate(frame, last_dets) if last_dets else frame
                 jpg = _jpg_encode(annotated)
 
@@ -185,7 +169,7 @@ def webcam_loop(stop_event) -> None:
                     stats=last_stats,
                 )
 
-                # Throttle broadcasts (no need to flood clients if FPS > broadcast cap)
+
                 now_ms = int(time.time() * 1000)
                 if now_ms - last_emit_ms < config.WEBCAM_BROADCAST_MIN_MS:
                     continue

@@ -1,4 +1,3 @@
-"""Raw WebSocket endpoint for browser stream events and commands."""
 from __future__ import annotations
 
 import json

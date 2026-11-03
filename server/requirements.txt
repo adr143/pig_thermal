@@ -1,29 +1,16 @@
-# ============================================================
-# Pig Monitoring System — Python dependencies
-# Install inside a venv:  pip install -r requirements.txt
-# ============================================================
-
-# Web framework + raw WebSocket
 Flask==3.0.3
 flask-sock==0.7.0
 simple-websocket==1.1.0
 
-# Image / video
 opencv-python==4.10.0.84
 numpy==1.26.4
 Pillow==10.4.0
 
-# ML — Ultralytics framework (supports YOLOv8/9/10/11/12 .pt files)
 ultralytics==8.3.78
-torch==2.3.1                # CPU build; for GPU use index URL
+torch==2.3.1
 torchvision==0.18.1
 
-# Scheduling
 APScheduler==3.10.4
 
-# Misc
 python-dotenv==1.0.1
 requests==2.32.3
-
-# Optional: install torch with CUDA if your mini-PC has a GPU
-#   pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121

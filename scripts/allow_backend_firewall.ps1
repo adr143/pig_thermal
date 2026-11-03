@@ -1,8 +1,15 @@
-#requires -RunAsAdministrator
-
 param(
     [int]$Port = 5000
 )
+
+$principal = [Security.Principal.WindowsPrincipal]::new(
+    [Security.Principal.WindowsIdentity]::GetCurrent()
+)
+if (-not $principal.IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator
+)) {
+    throw "Run this script as Administrator."
+}
 
 $ErrorActionPreference = "Stop"
 $RuleName = "PigMonitoringBackend-TCP-$Port"

@@ -1,4 +1,3 @@
-"""Raw WebSocket receiver for ESP32 thermal frames."""
 from __future__ import annotations
 
 import json
@@ -31,7 +30,7 @@ def register_thermal_http_route(app: Flask) -> None:
         if not isinstance(data, dict):
             return {"error": "expected a JSON object"}, 400
 
-        # The ESP32 HTTP payload omits "type"; WebSocket clients send it.
+
         data.setdefault("type", "frame")
         if not handle_thermal_message(data, source="HTTP POST"):
             return {"error": "invalid thermal frame"}, 400

@@ -1,13 +1,3 @@
-"""
-Snapshot capture + scheduler.
-
-- trigger_manual_snapshot(): captures webcam + thermal + inference result,
-  saves JPEG to disk, inserts DB rows, returns dict for broadcast.
-- SnapshotScheduler: wraps APScheduler, supports two modes:
-    interval:  every N minutes (e.g. 15 or 60)
-    cron:      standard cron expression (e.g. "0 8 * * *" = daily 08:00)
-  Persists state in DB so restarts keep config.
-"""
 from __future__ import annotations
 
 import logging
@@ -31,7 +21,7 @@ from websocket_hub import broadcast
 log = logging.getLogger("snapshot")
 
 _scheduler: Optional[BackgroundScheduler] = None
-_job = None  # current scheduled job
+_job = None
 
 def _snapshots_dir() -> str:
     os.makedirs(config.SNAPSHOTS_DIR, exist_ok=True)
@@ -46,16 +36,12 @@ def _ts_for_filename() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
-# ---------------------------------------------------------------------------
-# Capture + persist
-# ---------------------------------------------------------------------------
 def capture_current_frame() -> Optional[np.ndarray]:
-    """Grab a fresh frame from the webcam (not the live cache) for full-res."""
     cap = cv2.VideoCapture(config.WEBCAM_INDEX)
     if not cap.isOpened():
         log.error("snapshot: cannot open webcam for capture")
         return None
-    # Warm up: discard a few frames so AE/AWB settles
+
     frame = None
     for _ in range(5):
         ok, frame = cap.read()
@@ -81,7 +67,7 @@ def _draw_overlay(frame: np.ndarray, dets: List) -> np.ndarray:
         cv2.rectangle(out, (x1, y1 - th - 8), (x1 + tw + 8, y1), color, -1)
         cv2.putText(out, txt, (x1 + 4, y1 - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2, cv2.LINE_AA)
-    # Timestamp overlay
+
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cv2.putText(out, ts, (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2, cv2.LINE_AA)
@@ -96,12 +82,10 @@ def _save_jpeg(frame: np.ndarray, name_base: str) -> str:
 
 
 def trigger_manual_snapshot() -> Dict[str, Any]:
-    """Take a snapshot NOW (button press). Returns dict for broadcast + DB."""
     return _do_capture(source="button")
 
 
 def trigger_scheduled_snapshot() -> Dict[str, Any]:
-    """Take a snapshot (cron/interval trigger). Returns dict."""
     return _do_capture(source="schedule")
 
 
@@ -116,7 +100,7 @@ def _do_capture(source: str) -> Dict[str, Any]:
         log.error("snapshot: no webcam frame available")
         return {"ok": False, "error": "no_webcam_frame"}
 
-    # Run detection + classification on the captured frame
+
     try:
         dets = detect_and_classify(frame)
     except Exception as e:
@@ -127,7 +111,7 @@ def _do_capture(source: str) -> Dict[str, Any]:
     name_base = f"snap_{_ts_for_filename()}_{source}"
     rel_path = _save_jpeg(overlay, name_base)
 
-    # Avg thermal (cached; live thermal frame is fine for snapshot context)
+
     avg_thermal = None
     tf = state.get_thermal()
     if tf is not None:
@@ -174,11 +158,11 @@ def _do_capture(source: str) -> Dict[str, Any]:
         "snapshot_path": rel_path,
         "pigs": [
             {
-                "id": None,  # frontend can fetch detail to get IDs
+                "id": None,
                 "classification": p["classification"],
                 "class_conf": p["class_conf"],
                 "detect_conf": p["detect_conf"],
-                "temperature_c": None,  # blank, awaits manual input
+                "temperature_c": None,
                 "bbox": [p["bbox_x1"], p["bbox_y1"], p["bbox_x2"], p["bbox_y2"]],
             }
             for p in pigs_payload
@@ -190,9 +174,6 @@ def _do_capture(source: str) -> Dict[str, Any]:
     return result
 
 
-# ---------------------------------------------------------------------------
-# Scheduler
-# ---------------------------------------------------------------------------
 def _schedule_next_run_text() -> Optional[str]:
     if _job is None or _scheduler is None:
         return None
@@ -206,11 +187,10 @@ def _schedule_next_run_text() -> Optional[str]:
 
 
 def _apply_state(state_dict: Dict[str, Any]) -> None:
-    """Re-create the APScheduler job from DB state."""
     global _job
     if _scheduler is None:
         return
-    # Remove old job
+
     if _job is not None:
         try:
             _scheduler.remove_job(_job.id)
@@ -245,7 +225,6 @@ def _apply_state(state_dict: Dict[str, Any]) -> None:
 
 
 def init_scheduler() -> None:
-    """Start the APScheduler background process and load current DB state."""
     global _scheduler
     if _scheduler is not None:
         return

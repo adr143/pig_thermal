@@ -1,21 +1,3 @@
-"""
-SQLite schema and helpers for snapshots + per-pig records.
-
-Schema:
-    snapshots
-      id, captured_at (ISO8601), source ('button' | 'schedule'),
-      pig_count, avg_thermal_c, snapshot_path, notes
-
-    pigs   (one row per detected pig in a snapshot)
-      id, snapshot_id, bbox_x1, bbox_y1, bbox_x2, bbox_y2,
-      detect_conf, classification, class_conf,
-      temperature_c (NULL until user manually fills it in),
-      created_at, updated_at
-
-    schedule_state
-      id (always 1), enabled, mode, interval_min, cron_expr,
-      last_run_at, next_run_at
-"""
 from __future__ import annotations
 
 import os
@@ -45,7 +27,6 @@ def get_conn() -> sqlite3.Connection:
 
 @contextmanager
 def tx():
-    """Context manager that yields a connection and commits on success."""
     conn = get_conn()
     try:
         with _lock:
@@ -58,14 +39,11 @@ def tx():
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# Schema bootstrap
-# ---------------------------------------------------------------------------
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS snapshots (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    captured_at   TEXT    NOT NULL,            -- ISO 8601 UTC
-    source        TEXT    NOT NULL,            -- 'button' | 'schedule'
+    captured_at   TEXT    NOT NULL,
+    source        TEXT    NOT NULL,
     pig_count     INTEGER NOT NULL DEFAULT 0,
     avg_thermal_c REAL,
     snapshot_path TEXT,
@@ -82,7 +60,7 @@ CREATE TABLE IF NOT EXISTS pigs (
     detect_conf    REAL,
     classification TEXT,
     class_conf     REAL,
-    temperature_c  REAL,                       -- NULL until user fills in
+    temperature_c  REAL,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL,
     FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
@@ -93,7 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_pigs_snapshot ON pigs(snapshot_id);
 CREATE TABLE IF NOT EXISTS schedule_state (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
     enabled       INTEGER NOT NULL DEFAULT 0,
-    mode          TEXT    NOT NULL DEFAULT 'interval',  -- 'interval' | 'cron'
+    mode          TEXT    NOT NULL DEFAULT 'interval',
     interval_min  INTEGER NOT NULL DEFAULT 15,
     cron_expr     TEXT    NOT NULL DEFAULT '0 8 * * *',
     last_run_at   TEXT,
@@ -106,8 +84,8 @@ def init_db() -> None:
     os.makedirs(os.path.dirname(os.path.abspath(_db_path())), exist_ok=True)
     with tx() as conn:
         conn.executescript(SCHEMA_SQL)
-        # Insert default schedule_state row if missing (executescript doesn't
-        # support ? placeholders, so we run the parameterised INSERT separately).
+
+
         conn.execute(
             """INSERT OR IGNORE INTO schedule_state
                (id, enabled, mode, interval_min, cron_expr)
@@ -121,16 +99,10 @@ def init_db() -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def _now_iso() -> str:
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
 
-# ---------------------------------------------------------------------------
-# CRUD: snapshots
-# ---------------------------------------------------------------------------
 def insert_snapshot(
     captured_at: str,
     source: str,
@@ -139,13 +111,6 @@ def insert_snapshot(
     snapshot_path: str,
     pigs: List[Dict[str, Any]],
 ) -> int:
-    """
-    Insert a snapshot and all detected pig rows atomically.
-
-    `pigs` items have keys:
-        bbox_x1, bbox_y1, bbox_x2, bbox_y2, detect_conf,
-        classification, class_conf
-    """
     with tx() as conn:
         cur = conn.execute(
             """INSERT INTO snapshots
@@ -222,9 +187,6 @@ def delete_snapshot(snapshot_id: int) -> bool:
         return cur.rowcount > 0
 
 
-# ---------------------------------------------------------------------------
-# CRUD: schedule state
-# ---------------------------------------------------------------------------
 def get_schedule_state() -> Dict[str, Any]:
     with tx() as conn:
         row = conn.execute(

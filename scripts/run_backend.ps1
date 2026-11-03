@@ -1,8 +1,3 @@
-# ============================================================
-#  Start the Flask backend on Windows.
-#    Dev mode (default):  .\scripts\run_backend.ps1
-#    Prod mode (debug disabled): $env:PIGMON_PROD='1'; .\scripts\run_backend.ps1
-# ============================================================
 param(
     [string]$HostAddress = "0.0.0.0",
     [int]$Port = 5000

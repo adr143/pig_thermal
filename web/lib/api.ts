@@ -1,6 +1,4 @@
-// REST API client for the Flask backend.
-// In dev, requests go through the Next.js rewrite proxy (next.config.js)
-// so we can use relative URLs. In production, set NEXT_PUBLIC_API_BASE.
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
@@ -98,7 +96,6 @@ export const api = {
     }),
 };
 
-// WebSocket streams connect directly to Flask; Next.js rewrites are HTTP-only.
 export function streamWsUrl(): string {
   if (typeof window === "undefined") return "";
 

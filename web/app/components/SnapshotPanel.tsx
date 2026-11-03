@@ -107,7 +107,7 @@ export default function SnapshotPanel({
             )}
           </div>
           {latest.snapshot_path && (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img
               src={api.snapshotImageUrl(latest.id)}
               alt={`Latest snapshot ${latest.id}`}

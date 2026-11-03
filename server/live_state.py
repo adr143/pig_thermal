@@ -1,14 +1,3 @@
-"""
-Shared state for live frames + stats, with simple threading.Lock guards.
-
-Modules:
-  - thermal_capture : last received MLX90640 frame (768 floats + ambient)
-  - webcam_state    : last webcam JPEG (annotated) + detections + stats
-  - snapshot hub    : channels for streaming to browser clients
-
-This is a thin in-memory cache. Browser broadcasts are handled by
-stream_ws_server.py; thermal input is handled by the serial and WebSocket receivers.
-"""
 from __future__ import annotations
 
 import threading
@@ -23,15 +12,15 @@ from config import config
 
 @dataclass
 class ThermalFrame:
-    temps: List[float]        # 768 floats, row-major (32 wide x 24 tall)
+    temps: List[float]
     ambient: float
-    received_at: float       # epoch seconds
+    received_at: float
     source: str = "esp32"
 
 
 @dataclass
 class PigLive:
-    bbox: List[int]                  # x1, y1, x2, y2
+    bbox: List[int]
     detection_conf: float
     classification: Optional[str] = None
     class_confidence: Optional[float] = None
@@ -46,8 +35,6 @@ class WebcamStats:
 
 
 class LiveState:
-    """Thread-safe container for live frames + stats."""
-
     def __init__(self) -> None:
         self._lock = threading.RLock()
 
@@ -55,16 +42,16 @@ class LiveState:
         self.thermal_last_seen: float = 0.0
         self.thermal_source: str = "none"
 
-        # Latest annotated webcam frame (JPEG bytes) for HTTP fallback / poll
+
         self.webcam_jpeg: Optional[bytes] = None
         self.webcam_detections: List[PigLive] = []
         self.webcam_stats = WebcamStats()
 
-        # Current browser and thermal transport connection counts.
+
         self.browser_clients: int = 0
         self.thermal_clients: int = 0
 
-    # -- thermal --
+
     def set_thermal(self, frame: ThermalFrame) -> None:
         with self._lock:
             self.thermal = frame
@@ -81,7 +68,7 @@ class LiveState:
                 return float("inf")
             return time.time() - self.thermal_last_seen
 
-    # -- webcam --
+
     def set_webcam(self, jpeg: bytes, dets: List[PigLive], stats: WebcamStats) -> None:
         with self._lock:
             self.webcam_jpeg = jpeg
@@ -92,7 +79,7 @@ class LiveState:
         with self._lock:
             return self.webcam_jpeg, list(self.webcam_detections), self.webcam_stats
 
-    # -- counters --
+
     def inc_browser_client(self) -> int:
         with self._lock:
             self.browser_clients += 1
@@ -114,5 +101,4 @@ class LiveState:
             return self.thermal_clients
 
 
-# Singleton
 state = LiveState()

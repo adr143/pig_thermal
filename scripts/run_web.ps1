@@ -1,6 +1,3 @@
-# ============================================================
-#  Start the Next.js dev server on Windows.
-# ============================================================
 $ErrorActionPreference = "Stop"
 
 $ProjectDir = Resolve-Path "$PSScriptRoot\.."

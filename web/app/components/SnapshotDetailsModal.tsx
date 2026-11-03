@@ -112,7 +112,7 @@ export default function SnapshotDetailsModal({
           <>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="flex min-h-40 items-center justify-center overflow-hidden rounded border border-slate-700 bg-black">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+
                 <img
                   src={api.snapshotImageUrl(detail.id)}
                   alt={`Snapshot ${detail.id}`}

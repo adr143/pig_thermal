@@ -13,17 +13,14 @@ export default function Page() {
   const stream = useStream();
   const [view, setView] = useState<ViewMode>("split");
 
-  // Use serverInfo or live stats; compute displayable fields
   const thermalClients = stream.serverInfo?.thermal_clients ?? 0;
   const browserClients = stream.serverInfo?.browser_clients ?? 0;
 
-  // Track the last thermal message timestamp so we can show "X s ago"
   const [thermalTs, setThermalTs] = useState<number | null>(null);
   useEffect(() => {
     if (stream.thermal) setThermalTs(Date.now());
   }, [stream.thermal]);
 
-  // Re-render every second so the "thermal age" indicator updates
   const [, setNowTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setNowTick((n) => n + 1), 1000);
@@ -34,7 +31,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen p-4 md:p-6">
-      {/* Header */}
+
       <header className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-gray-100">
@@ -59,9 +56,9 @@ export default function Page() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: live views */}
+
         <div className="lg:col-span-2 space-y-4">
-          {/* Tab bar */}
+
           <div className="flex items-center gap-1 bg-panel border border-slate-800 rounded-md p-1">
             <TabButton
               active={view === "webcam"}
@@ -89,7 +86,6 @@ export default function Page() {
             </label>
           </div>
 
-          {/* Live view */}
           {view === "webcam" && (
             <div className="card">
               <h2 className="font-semibold text-gray-100 mb-3">Webcam Live</h2>
@@ -147,7 +143,6 @@ export default function Page() {
 
         </div>
 
-        {/* Right: stats + snapshot panel */}
         <div className="space-y-4">
           <StatsPanel
             stats={stream.webcamStats}

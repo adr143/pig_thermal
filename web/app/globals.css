@@ -17,13 +17,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Tight scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #0b0f14; }
 ::-webkit-scrollbar-thumb { background: #2a3342; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #3a4456; }
 
-/* Buttons */
 .btn {
   @apply px-3 py-2 rounded-md text-sm font-medium transition-colors;
 }
